@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaqMan PCR Primer Design</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .result-container {
+            display: none;
+            margin-top: 30px;
+        }
+        .primer-card {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .gc-plot {
+            max-width: 100%;
+            margin-top: 10px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .error-message {
+            color: #dc3545;
+            padding: 10px;
+            border: 1px solid #dc3545;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">TaqMan PCR Primer Design Tool</h1>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Input Sequence</h5>
+            </div>
+            <div class="card-body">
+                <form id="primer-form">
+                    <div class="mb-3">
+                        <label for="sequence-input" class="form-label">FASTA Sequence:</label>
+                        <textarea class="form-control" id="sequence-input" name="sequence" rows="6" placeholder=">Sequence_Name&#10;ATGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTA"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="file-input" class="form-label">Or upload FASTA file:</label>
+                        <input class="form-control" type="file" id="file-input" name="file">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Design Primers</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Designing primers... This may take a few moments.</p>
+        </div>
+        
+        <div class="error-message" id="error-container"></div>
+        
+        <div class="result-container" id="results">
+            <h2 class="mb-3">Results</h2>
+            
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Overall GC Content</h5>
+                    <button class="btn btn-sm btn-success" id="download-btn">Download Results</button>
+                </div>
+                <div class="card-body text-center">
+                    <img id="overall-gc-plot" class="img-fluid" alt="Overall GC Content Plot" />
+                </div>
+            </div>
+            
+            <h3 class="mb-3">Primer Pairs</h3>
+            <div id="primer-results"></div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('primer-form');
+            const loading = document.querySelector('.loading');
+            const results = document.getElementById('results');
+            const primerResults = document.getElementById('primer-results');
+            const overallGcPlot = document.getElementById('overall-gc-plot');
+            const downloadBtn = document.getElementById('download-btn');
+            const errorContainer = document.getElementById('error-container');
+            
+            let currentJobId = null;
+            
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // Clear previous results
+                primerResults.innerHTML = '';
+                errorContainer.style.display = 'none';
+                
+                // Show loading indicator
+                loading.style.display = 'block';
+                results.style.display = 'none';
+                
+                try {
+                    const formData = new FormData(form);
+                    
+                    // Send design request
+                    const response = await fetch('/design', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to design primers');
+                    }
+                    
+                    // Store job ID for download
+                    currentJobId = data.job_id;
+                    
+                    // Display overall GC plot
+                    overallGcPlot.src = `/static/${data.gc_plot}`;
+                    
+                    // Display primer results
+                    data.primers.forEach((primer, index) => {
+                        const primerCard = document.createElement('div');
+                        primerCard.className = 'primer-card';
+                        
+                        primerCard.innerHTML = `
+                            <h4>Primer Pair ${index + 1}</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Forward Primer</h5>
+                                    <p><strong>Sequence:</strong> ${primer.forward}</p>
+                                    <p><strong>Tm:</strong> ${primer.forward_tm}°C</p>
+                                    <p><strong>GC Content:</strong> ${primer.forward_gc}%</p>
+                                    <p><strong>BLAST:</strong> ${primer.blast_forward}</p>
+                                    
+                                    <h5 class="mt-4">Reverse Primer</h5>
+                                    <p><strong>Sequence:</strong> ${primer.reverse}</p>
+                                    <p><strong>Tm:</strong> ${primer.reverse_tm}°C</p>
+                                    <p><strong>GC Content:</strong> ${primer.reverse_gc}%</p>
+                                    <p><strong>BLAST:</strong> ${primer.blast_reverse}</p>
+                                    
+                                    <h5 class="mt-4">TaqMan Probe</h5>
+                                    <p><strong>Sequence:</strong> ${primer.probe.sequence}</p>
+                                    ${primer.probe.sequence !== "No valid probe found" ? 
+                                    `<p><strong>Tm:</strong> ${primer.probe.tm}°C</p>
+                                     <p><strong>GC Content:</strong> ${primer.probe.gc}%</p>` : ''}
+                                </div>
+                                <div class="col-md-6">
+                                    <h5>Amplicon GC Content</h5>
+                                    <img src="/static/${primer.gc_plot}" class="img-fluid gc-plot" alt="GC Content Plot" />
+                                </div>
+                            </div>
+                        `;
+                        
+                        primerResults.appendChild(primerCard);
+                    });
+                    
+                    // Show results
+                    results.style.display = 'block';
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    errorContainer.textContent = error.message;
+                    errorContainer.style.display = 'block';
+                } finally {
+                    // Hide loading indicator
+                    loading.style.display = 'none';
+                }
+            });
+            
+            // Download results handler
+            downloadBtn.addEventListener('click', function() {
+                if (currentJobId) {
+                    window.location.href = `/download/${currentJobId}`;
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

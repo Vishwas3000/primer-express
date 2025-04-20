@@ -1,0 +1,56 @@
+{
+  "primers": [
+    {
+      "forward": "GTCAAGGCTGAGAACGGGAA",
+      "reverse": "GCCTTCTCCATGGTGGTGAA",
+      "forward_tm": 60.0,
+      "reverse_tm": 60.0,
+      "forward_gc": 55.0,
+      "reverse_gc": 55.0,
+      "penalty": 0.07,
+      "probe": {
+        "sequence": "No valid probe found",
+        "gc": 0.0,
+        "tm": 0.0
+      },
+      "blast_forward": "Submitted to NCBI BLAST",
+      "blast_reverse": "Submitted to NCBI BLAST",
+      "gc_plot": "plots/gc_plot_pair_1.png"
+    },
+    {
+      "forward": "TCCAAAATCAAGTGGGGCGA",
+      "reverse": "AAATGAGCCCCAGCCTTCTC",
+      "forward_tm": 59.9,
+      "reverse_tm": 60.0,
+      "forward_gc": 50.0,
+      "reverse_gc": 55.0,
+      "penalty": 0.15,
+      "probe": {
+        "sequence": "No valid probe found",
+        "gc": 0.0,
+        "tm": 0.0
+      },
+      "blast_forward": "Submitted to NCBI BLAST",
+      "blast_reverse": "Submitted to NCBI BLAST",
+      "gc_plot": "plots/gc_plot_pair_2.png"
+    },
+    {
+      "forward": "GTCAAGGCTGAGAACGGGAA",
+      "reverse": "TCGCCCCACTTGATTTTGGA",
+      "forward_tm": 60.0,
+      "reverse_tm": 59.9,
+      "forward_gc": 55.0,
+      "reverse_gc": 50.0,
+      "penalty": 0.15,
+      "probe": {
+        "sequence": "No valid probe found",
+        "gc": 0.0,
+        "tm": 0.0
+      },
+      "blast_forward": "Submitted to NCBI BLAST",
+      "blast_reverse": "Submitted to NCBI BLAST",
+      "gc_plot": "plots/gc_plot_pair_3.png"
+    }
+  ],
+  "gc_plot": "plots/gc_plot_overall.png"
+}

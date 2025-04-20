@@ -1,0 +1,6 @@
+biopython==1.81
+primer3-py==2.0.0
+matplotlib==3.7.2
+numpy==1.24.3
+requests==2.31.0
+flask==2.3.3 
