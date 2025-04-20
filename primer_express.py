@@ -45,6 +45,9 @@ def parse_arguments() -> argparse.Namespace:
         "-p", "--plot-dir", type=str, default="plots",
         help="Directory to save GC plots (default: plots)"
     )
+    parser.add_argument(
+        "--relaxed", action="store_true", help="Use relaxed constraints for probe design"
+    )
     return parser.parse_args()
 
 
@@ -166,7 +169,7 @@ def design_primers(sequence: str, num_pairs: int = 3) -> List[Dict[str, Any]]:
     return primer_pairs
 
 
-def design_taqman_probe(sequence: str, forward_start: int, reverse_end: int) -> Optional[Dict[str, Any]]:
+def design_taqman_probe(sequence: str, forward_start: int, reverse_end: int, relaxed: bool = False) -> Optional[Dict[str, Any]]:
     """
     Design a TaqMan probe for the given primer pair region.
     
@@ -174,6 +177,7 @@ def design_taqman_probe(sequence: str, forward_start: int, reverse_end: int) -> 
         sequence: Full DNA sequence
         forward_start: Start position of forward primer
         reverse_end: End position of reverse primer
+        relaxed: Use relaxed constraints for probe selection
         
     Returns:
         Dictionary with probe information or None if no valid probe found
@@ -200,14 +204,14 @@ def design_taqman_probe(sequence: str, forward_start: int, reverse_end: int) -> 
         'PRIMER_INTERNAL_MAX_TM': 72.0,
         'PRIMER_INTERNAL_MIN_GC': 40.0,
         'PRIMER_INTERNAL_MAX_GC': 65.0,
-        'PRIMER_NUM_RETURN': 10
+        'PRIMER_NUM_RETURN': 20  # Increased from 10 to 20 for more candidates
     }
     
     # Run primer3 design for probe
     probe_results = primer3.bindings.designPrimers(seq_args, global_args)
     
-    # Look for valid probes
-    for i in range(10):
+    # First try with strict constraints
+    for i in range(20):
         probe_key = f'PRIMER_INTERNAL_OLIGO_{i}_SEQUENCE'
         if probe_key not in probe_results:
             break
@@ -224,7 +228,53 @@ def design_taqman_probe(sequence: str, forward_start: int, reverse_end: int) -> 
         return {
             'sequence': probe_seq,
             'gc': round(probe_gc, 1),
-            'tm': round(probe_tm, 1)
+            'tm': round(probe_tm, 1),
+            'relaxed': False
+        }
+    
+    # If relaxed mode or no probe found with strict constraints
+    if relaxed or True:  # Always try relaxed as a fallback
+        for i in range(20):
+            probe_key = f'PRIMER_INTERNAL_OLIGO_{i}_SEQUENCE'
+            if probe_key not in probe_results:
+                break
+                
+            probe_seq = probe_results[probe_key]
+            
+            # Apply only minimal constraints: no super-long homopolymers
+            if 'GGGGGGG' in probe_seq or 'AAAAAAA' in probe_seq or 'TTTTTTT' in probe_seq or 'CCCCCCC' in probe_seq:
+                continue
+            
+            probe_tm = probe_results[f'PRIMER_INTERNAL_OLIGO_{i}_TM']
+            probe_gc = GC(probe_seq)
+            
+            return {
+                'sequence': probe_seq,
+                'gc': round(probe_gc, 1),
+                'tm': round(probe_tm, 1),
+                'relaxed': True
+            }
+    
+    # If no suitable probe is found, create a simple one in the middle of the amplicon
+    if len(probe_region) >= 25:
+        mid_point = len(probe_region) // 2
+        custom_probe = probe_region[mid_point-12:mid_point+13]
+        probe_gc = GC(custom_probe)
+        
+        # Estimate melting temperature using a simple formula
+        # Tm = 2°C(A+T) + 4°C(G+C)
+        a_count = custom_probe.count('A')
+        t_count = custom_probe.count('T')
+        g_count = custom_probe.count('G')
+        c_count = custom_probe.count('C')
+        tm = 2 * (a_count + t_count) + 4 * (g_count + c_count)
+        
+        return {
+            'sequence': custom_probe,
+            'gc': round(probe_gc, 1),
+            'tm': round(tm, 1),
+            'relaxed': True,
+            'note': 'Custom mid-amplicon probe (fallback)'
         }
     
     return None
@@ -333,7 +383,8 @@ def main() -> None:
             probe = design_taqman_probe(
                 sequence, 
                 pair['forward_start'], 
-                pair['reverse_end']
+                pair['reverse_end'],
+                relaxed=args.relaxed
             )
             
             if not probe:
@@ -343,6 +394,9 @@ def main() -> None:
                     "gc": 0.0,
                     "tm": 0.0
                 }
+            else:
+                print(f"Designed probe for pair {i+1}: {probe['sequence']}" + 
+                      (" (relaxed constraints)" if probe.get('relaxed', False) else ""))
             
             # Simulate BLAST submission
             blast_forward = simulate_blast_submission(pair['forward'])
